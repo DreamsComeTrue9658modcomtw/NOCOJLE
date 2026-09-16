@@ -21,7 +21,7 @@
     .qty-ctrl { display: flex; align-items: center; gap: 8px; }
     .qty-btn { width: 30px; height: 30px; background: #e9ecef; border: none; border-radius: 50%; font-size: 18px; font-weight: bold; cursor: pointer; }
     button.submit-btn { width: 100%; background: #27ae60; color: white; border: none; padding: 12px; border-radius: 6px; font-size: 18px; font-weight: bold; cursor: pointer; margin-top: 15px; }
-    button:disabled { background: #ccc; cursor: not-allowed; }
+    button:disabled { background: #ccc; }
     .status-badge { display: block; text-align: center; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 18px; margin-bottom: 15px; }
     .bg-cooking { background: #fff3cd; color: #856404; }
     .bg-ready { background: #cff4fc; color: #055160; border: 2px solid #0dcaf0; animation: pulse 1.5s infinite; }
@@ -30,20 +30,12 @@
     .loc-info { background: #e8f4fd; color: #0d6efd; font-size: 12px; padding: 8px; border-radius: 6px; margin-bottom: 12px; text-align: center; }
     .query-box { margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee; text-align: center; }
     .btn-query { background: #17a2b8; color: white; border: none; padding: 8px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; }
-    /* ⚠️ 防重複警告卡片樣式 */
-    .alert-box { background: #f8d7da; color: #721c24; padding: 12px; border-radius: 6px; margin-bottom: 15px; font-size: 14px; display: none; text-align: center; }
   </style>
 </head>
 <body>
   <div class="card">
     <h2>🍽️ 智慧自助點餐</h2>
     
-    <!-- ⚠️ 防重複點餐提示區塊 (新增) -->
-    <div id="pendingOrderAlert" class="alert-box">
-      <strong>⚠️ 您目前有正在製作中的訂單！</strong><br>
-      為避免重複點餐，請等待上一筆訂單完成取餐後再重新下單。
-    </div>
-
     <div id="orderForm">
       <div id="locStatus" class="loc-info">📍 正在獲取現場位置資訊...</div>
 
@@ -120,6 +112,10 @@
     let currentType = 'dineIn';
     let userLat = null;
     let userLng = null;
+    
+    // 【狀態追蹤旗標】確保「可取餐」提醒只會觸發一次，避免輪詢時重複叫號或一直震動
+    let hasNotifiedReady = false; 
+    let titleBlinkTimer = null; // 分頁頁籤閃爍定時器
 
     async function callGasApi(actionName, payload = {}) {
       try {
@@ -133,29 +129,10 @@
       }
     }
 
-    // 頁面載入時執行：定位、讀菜單、檢查是否有未完成的歷史訂單
     window.onload = function() {
       getLocation();
       loadMenu();
-      checkExistingOrder(); // 🔒 檢查防重複機制
     };
-
-    // 🔒 1. 檢查手機是否已有「處理中」的訂單 (防重複機制核心)
-    async function checkExistingOrder() {
-      const existingOrderId = localStorage.getItem('active_order_id');
-      if (existingOrderId) {
-        const res = await callGasApi('checkOrderStatus', { orderId: existingOrderId });
-        if (res.success && (res.status === '出餐中' || res.status === '可取餐' || res.status === '餐點製作中')) {
-          // 尚有未完成訂單 -> 顯示警告，隱藏點餐表單，切換至狀態卡片
-          document.getElementById('pendingOrderAlert').style.display = 'block';
-          showStatusUI(res.orderId, res.tableNo || '-', res.amount || 0, res.items || '訂單進行中...', res.status);
-        } else {
-          // 訂單已完成或已取消 -> 清除 LocalStorage 記錄
-          localStorage.removeItem('active_order_id');
-          document.getElementById('pendingOrderAlert').style.display = 'none';
-        }
-      }
-    }
 
     function getLocation() {
       const locStatus = document.getElementById('locStatus');
@@ -243,7 +220,6 @@
       return total;
     }
 
-    // 🔒 2. 送出訂單（雙重防刷鎖定：防止連點按鈕 + 將單號寫入 LocalStorage）
     async function submitOrder() {
       const totalAmount = calculateTotal();
       if (totalAmount === 0) { alert('請至少選擇一項餐點！'); return; }
@@ -259,7 +235,6 @@
       const note = document.getElementById('orderNote').value.trim();
       const backupCode = document.getElementById('backupCodeInput').value.trim();
 
-      // 第一重防刷：立即停用按鈕，防止連續快速點擊
       const btn = document.getElementById('submitBtn');
       btn.disabled = true;
       btn.innerText = '傳送訂單中...';
@@ -277,9 +252,6 @@
       });
 
       if (res.success) {
-        // 第二重防刷：將單號寫入手機 LocalStorage 鎖定頁面
-        localStorage.setItem('active_order_id', res.orderId);
-
         let itemsHtml = '';
         res.items.forEach(i => {
           itemsHtml += `<div>${i.name} x${i.qty} - NT$ ${i.price * i.qty}</div>`;
@@ -312,8 +284,48 @@
       document.getElementById('displayTable').innerText = tableNo;
       document.getElementById('displayTotal').innerText = 'NT$ ' + amount;
       document.getElementById('summaryItems').innerHTML = itemsHtml;
+      
+      hasNotifiedReady = false; // 重置提醒旗標
       updateStatusBadge(status);
       startPolling(orderId);
+    }
+
+    // ===== 🔔 顧客端取餐通知靈魂區塊 (震動、語音、閃爍標題) =====
+    function triggerCustomerNotification() {
+      // --- 1. 手機震動 (Vibration API) ---
+      // 說明：節奏為 震動 400ms -> 停 200ms -> 震動 400ms -> 停 200ms -> 震動 800ms
+      // ⚠️ 備註：僅 Android 完全支援網頁震動，iOS (iPhone) 受限 Apple 政策只會發出語音。
+      if ("vibrate" in navigator) {
+        navigator.vibrate([400, 200, 400, 200, 800]); 
+      }
+
+      // --- 2. 語音播報提示 ---
+      if ('speechSynthesis' in window) {
+        const msgText = "您的餐點已準備好，請前往櫃檯取餐！";
+        const utter = new SpeechSynthesisUtterance(msgText);
+        utter.lang = 'zh-TW';
+        
+        // 💡【可自行開啟或微調】顧客語音設定：
+        // utter.rate = 1.1;  // 語速
+        // utter.pitch = 1.1; // 音調
+        
+        window.speechSynthesis.speak(utter);
+      }
+
+      // --- 3. 附加功能：瀏覽器頁籤標題閃爍提醒 (閃爍 10 秒) ---
+      // 說明：若顧客將手機放在旁邊或切換分頁，瀏覽器頁籤會閃爍「🔔請前往取餐！」
+      let flag = false;
+      if (titleBlinkTimer) clearInterval(titleBlinkTimer);
+      titleBlinkTimer = setInterval(() => {
+        document.title = flag ? "🔔【請前往取餐！】" : "🍽️ 智慧自助點餐";
+        flag = !flag;
+      }, 800);
+
+      // 10 秒後自動停止標題閃爍
+      setTimeout(() => {
+        if (titleBlinkTimer) clearInterval(titleBlinkTimer);
+        document.title = "智慧自助點餐系統";
+      }, 10000);
     }
 
     function updateStatusBadge(status) {
@@ -321,9 +333,18 @@
       if (status === '可取餐') {
         badge.className = 'status-badge bg-ready';
         badge.innerText = '🔔 餐點已製作完成，請至櫃檯【可取餐】！';
+
+        // 當狀態變更為「可取餐」且尚未提醒過時觸發通知
+        if (!hasNotifiedReady) {
+          hasNotifiedReady = true; // 標記為已提醒，防止定時器重複震動/叫號
+          triggerCustomerNotification();
+        }
+
       } else if (status === '取餐完成') {
         badge.className = 'status-badge bg-done';
         badge.innerText = '🎉 已完成取餐，祝您用餐愉快！';
+        if (titleBlinkTimer) clearInterval(titleBlinkTimer);
+        document.title = "智慧自助點餐系統";
       } else {
         badge.className = 'status-badge bg-cooking';
         badge.innerText = '⏳ 餐點製作中，請稍候...';
@@ -332,31 +353,23 @@
 
     function startPolling(orderId) {
       if (pollTimer) clearInterval(pollTimer);
+      
+      // 【可自訂】顧客端查詢訂單狀態的頻率（目前設為 3000毫秒 = 3秒）
       pollTimer = setInterval(async function() {
         const res = await callGasApi('checkOrderStatus', { orderId: orderId });
         if (res.success) {
           updateStatusBadge(res.status);
-          if (res.status === '取餐完成') {
-            // 取餐完成後清除防重複記錄
-            localStorage.removeItem('active_order_id');
-            document.getElementById('pendingOrderAlert').style.display = 'none';
-            clearInterval(pollTimer);
-          }
+          // 若顧客已完成取餐，自動停止向後端查詢
+          if (res.status === '取餐完成') clearInterval(pollTimer);
         }
       }, 3000);
     }
 
-    // 手動點擊「返回點餐頁面」
     function resetToOrderForm() {
-      const existingOrderId = localStorage.getItem('active_order_id');
-      if (existingOrderId) {
-        alert('⚠️ 您目前的訂單尚未完成取餐，為避免重複點餐，目前無法重新填寫表單！');
-        return;
-      }
-
       if (pollTimer) clearInterval(pollTimer);
+      if (titleBlinkTimer) clearInterval(titleBlinkTimer);
+      document.title = "智慧自助點餐系統";
       document.getElementById('orderStatus').style.display = 'none';
-      document.getElementById('pendingOrderAlert').style.display = 'none';
       document.getElementById('orderForm').style.display = 'block';
       document.getElementById('submitBtn').disabled = false;
       document.getElementById('submitBtn').innerText = '送出訂單';
