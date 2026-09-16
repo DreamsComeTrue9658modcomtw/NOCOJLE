@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>智慧自助點餐系統</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 15px; background: #f8f9fa; margin: 0; }
+    .card { background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.08); max-width: 450px; margin: auto; }
+    h2 { margin-top: 0; color: #2c3e50; text-align: center; }
+    .form-group { margin-bottom: 15px; }
+    label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; }
+    select, input[type="text"], textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
+    .type-toggle { display: flex; gap: 10px; margin-bottom: 12px; }
+    .type-btn { flex: 1; padding: 10px; border: 2px solid #007bff; background: #fff; color: #007bff; border-radius: 6px; font-weight: bold; font-size: 15px; cursor: pointer; text-align: center; }
+    .type-btn.active { background: #007bff; color: #fff; }
+    .menu-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px dashed #eee; }
+    .menu-info { flex-grow: 1; }
+    .menu-name { font-weight: bold; font-size: 16px; }
+    .menu-price { color: #e74c3c; font-weight: bold; margin-top: 2px; }
+    .qty-ctrl { display: flex; align-items: center; gap: 8px; }
+    .qty-btn { width: 30px; height: 30px; background: #e9ecef; border: none; border-radius: 50%; font-size: 18px; font-weight: bold; cursor: pointer; }
+    button.submit-btn { width: 100%; background: #27ae60; color: white; border: none; padding: 12px; border-radius: 6px; font-size: 18px; font-weight: bold; cursor: pointer; margin-top: 15px; }
+    button:disabled { background: #ccc; }
+    .status-badge { display: block; text-align: center; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 18px; margin-bottom: 15px; }
+    .bg-cooking { background: #fff3cd; color: #856404; }
+    .bg-ready { background: #cff4fc; color: #055160; border: 2px solid #0dcaf0; animation: pulse 1.5s infinite; }
+    .bg-done { background: #d4edda; color: #155724; }
+    @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.02); } 100% { transform: scale(1); } }
+    .loc-info { background: #e8f4fd; color: #0d6efd; font-size: 12px; padding: 8px; border-radius: 6px; margin-bottom: 12px; text-align: center; }
+    .query-box { margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee; text-align: center; }
+    .btn-query { background: #17a2b8; color: white; border: none; padding: 8px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>🍽️ 智慧自助點餐</h2>
+    
+    <div id="orderForm">
+      <div id="locStatus" class="loc-info">📍 正在獲取現場位置資訊...</div>
+
+      <div class="form-group">
+        <label>用餐方式</label>
+        <div class="type-toggle">
+          <div id="btnDineIn" class="type-btn active" onclick="setDiningType('dineIn')">🍽️ 內用</div>
+          <div id="btnTakeout" class="type-btn" onclick="setDiningType('takeout')">🛍️ 外帶</div>
+        </div>
+      </div>
+
+      <div class="form-group" id="tableGroup">
+        <label>選擇桌號</label>
+        <select id="tableSelect">
+          <option value="桌號 1">桌號 1</option>
+          <option value="桌號 2">桌號 2</option>
+          <option value="桌號 3">桌號 3</option>
+          <option value="桌號 5">桌號 5</option>
+          <option value="桌號 6">桌號 6</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>選擇餐點</label>
+        <div id="menuContainer">載入菜單中...</div>
+      </div>
+
+      <div class="form-group">
+        <label>備註需求</label>
+        <textarea id="orderNote" rows="2" placeholder="例如：去冰、不加蔥..."></textarea>
+      </div>
+
+      <div class="form-group" id="backupCodeGroup" style="display:none; background:#fff3cd; padding:10px; border-radius:6px;">
+        <label style="color:#856404; font-size:13px;">⚠️ 無法取得精準定位，請輸入現場驗證碼：</label>
+        <input type="text" id="backupCodeInput" placeholder="請向櫃檯詢問驗證碼 (預設: 8888)">
+      </div>
+
+      <div style="text-align: right; font-size: 18px; font-weight: bold; margin-top: 10px;">
+        合計金額：<span id="totalDisplay" style="color: #e74c3c;">NT$ 0</span>
+      </div>
+
+      <button id="submitBtn" class="submit-btn" onclick="submitOrder()">送出訂單</button>
+
+      <div class="query-box">
+        <label style="font-size:13px; color:#666;">已有訂單？輸入單號查詢進度：</label>
+        <div style="display:flex; gap:5px; margin-top:5px;">
+          <input type="text" id="queryOrderId" placeholder="例如: 123456">
+          <button class="btn-query" onclick="queryOrderDirectly()">查詢</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="orderStatus" style="display:none;">
+      <div id="statusBadge" class="status-badge bg-cooking">⏳ 餐點製作中，請稍候...</div>
+      <div style="text-align: center; margin-bottom: 15px;">
+        <span style="font-size: 14px; color: #666;">訂單編號</span>
+        <h3 id="displayOrderId" style="color:#2c3e50; margin: 5px 0;"></h3>
+        <p id="displayTable" style="font-weight: bold; color: #333; margin:0;"></p>
+      </div>
+      <div id="summaryItems" style="background:#f9f9f9; padding: 10px; border-radius: 8px; font-size: 14px; margin-bottom: 15px;"></div>
+      <div style="text-align: center; font-size: 20px; font-weight: bold; color: #e74c3c; margin-bottom: 15px;">
+        總金額：<span id="displayTotal"></span>
+      </div>
+      <button class="submit-btn" style="background:#6c757d;" onclick="resetToOrderForm()">返回點餐頁面</button>
+    </div>
+  </div>
+
+  <script>
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycby6wjxckZ0oaBkGCKxhZi6zCLuE8M8dv83GLqGOhf65R8wR7W4zHWv26Xdq4FdYz6k/exec";
+
+    let menuList = [];
+    let cart = {};
+    let pollTimer = null;
+    let currentType = 'dineIn';
+    let userLat = null;
+    let userLng = null;
+
+    async function callGasApi(actionName, payload = {}) {
+      try {
+        const response = await fetch(GAS_API_URL, {
+          method: "POST",
+          body: JSON.stringify({ action: actionName, ...payload })
+        });
+        return await response.json();
+      } catch (err) {
+        return { success: false, message: "網路通訊失敗：" + err.toString() };
+      }
+    }
+
+    window.onload = function() {
+      getLocation();
+      loadMenu();
+    };
+
+    function getLocation() {
+      const locStatus = document.getElementById('locStatus');
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          function(position) {
+            userLat = position.coords.latitude;
+            userLng = position.coords.longitude;
+            locStatus.style.background = '#d4edda';
+            locStatus.style.color = '#155724';
+            locStatus.innerText = '✅ 已成功取得現場位置防偽認證';
+          },
+          function(error) {
+            locStatus.style.background = '#f8d7da';
+            locStatus.style.color = '#721c24';
+            locStatus.innerText = '⚠️ 無法讀取位置，請使用備用驗證碼';
+            document.getElementById('backupCodeGroup').style.display = 'block';
+          },
+          { enableHighAccuracy: true, timeout: 8000 }
+        );
+      } else {
+        document.getElementById('backupCodeGroup').style.display = 'block';
+      }
+    }
+
+    function setDiningType(type) {
+      currentType = type;
+      const btnIn = document.getElementById('btnDineIn');
+      const btnOut = document.getElementById('btnTakeout');
+      const tableGroup = document.getElementById('tableGroup');
+
+      if (type === 'dineIn') {
+        btnIn.classList.add('active');
+        btnOut.classList.remove('active');
+        tableGroup.style.display = 'block';
+      } else {
+        btnOut.classList.add('active');
+        btnIn.classList.remove('active');
+        tableGroup.style.display = 'none';
+      }
+    }
+
+    async function loadMenu() {
+      const list = await callGasApi('getMenuList');
+      menuList = list || [];
+      const container = document.getElementById('menuContainer');
+      if (menuList.length === 0) {
+        container.innerHTML = '<p style="color:#999;">目前無可選餐點</p>';
+        return;
+      }
+
+      container.innerHTML = '';
+      menuList.forEach(item => {
+        cart[item.id] = 0;
+        const div = document.createElement('div');
+        div.className = 'menu-item';
+        div.innerHTML = `
+          <div class="menu-info">
+            <div class="menu-name">${item.name}</div>
+            <div class="menu-price">NT$ ${item.price}</div>
+          </div>
+          <div class="qty-ctrl">
+            <button class="qty-btn" onclick="updateQty('${item.id}', -1)">-</button>
+            <span id="qty-${item.id}">0</span>
+            <button class="qty-btn" onclick="updateQty('${item.id}', 1)">+</button>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function updateQty(id, change) {
+      if (!cart[id]) cart[id] = 0;
+      cart[id] = Math.max(0, cart[id] + change);
+      document.getElementById('qty-' + id).innerText = cart[id];
+      calculateTotal();
+    }
+
+    function calculateTotal() {
+      let total = 0;
+      menuList.forEach(item => {
+        total += (cart[item.id] || 0) * item.price;
+      });
+      document.getElementById('totalDisplay').innerText = 'NT$ ' + total;
+      return total;
+    }
+
+    async function submitOrder() {
+      const totalAmount = calculateTotal();
+      if (totalAmount === 0) { alert('請至少選擇一項餐點！'); return; }
+
+      const orderItems = [];
+      menuList.forEach(item => {
+        if (cart[item.id] > 0) {
+          orderItems.push({ name: item.name, qty: cart[item.id], price: item.price });
+        }
+      });
+
+      let finalTable = (currentType === 'takeout') ? '外帶打包' : '內用 - ' + document.getElementById('tableSelect').value;
+      const note = document.getElementById('orderNote').value.trim();
+      const backupCode = document.getElementById('backupCodeInput').value.trim();
+
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      btn.innerText = '傳送訂單中...';
+
+      const res = await callGasApi('submitOrder', {
+        data: {
+          tableNo: finalTable,
+          items: orderItems,
+          totalAmount: totalAmount,
+          note: note,
+          lat: userLat,
+          lng: userLng,
+          backupCode: backupCode
+        }
+      });
+
+      if (res.success) {
+        let itemsHtml = '';
+        res.items.forEach(i => {
+          itemsHtml += `<div>${i.name} x${i.qty} - NT$ ${i.price * i.qty}</div>`;
+        });
+        showStatusUI(res.orderId, res.tableNo, res.totalAmount, itemsHtml, '出餐中');
+      } else {
+        alert(res.message || '點餐失敗');
+        document.getElementById('backupCodeGroup').style.display = 'block';
+        btn.disabled = false;
+        btn.innerText = '送出訂單';
+      }
+    }
+
+    async function queryOrderDirectly() {
+      const qId = document.getElementById('queryOrderId').value.trim();
+      if (!qId) return alert('請輸入訂單編號');
+
+      const res = await callGasApi('checkOrderStatus', { orderId: qId });
+      if (res.success) {
+        showStatusUI(res.orderId, res.tableNo, res.amount, res.items, res.status);
+      } else {
+        alert('找不到該筆訂單編號！');
+      }
+    }
+
+    function showStatusUI(orderId, tableNo, amount, itemsHtml, status) {
+      document.getElementById('orderForm').style.display = 'none';
+      document.getElementById('orderStatus').style.display = 'block';
+      document.getElementById('displayOrderId').innerText = orderId;
+      document.getElementById('displayTable').innerText = tableNo;
+      document.getElementById('displayTotal').innerText = 'NT$ ' + amount;
+      document.getElementById('summaryItems').innerHTML = itemsHtml;
+      updateStatusBadge(status);
+      startPolling(orderId);
+    }
+
+    function updateStatusBadge(status) {
+      const badge = document.getElementById('statusBadge');
+      if (status === '可取餐') {
+        badge.className = 'status-badge bg-ready';
+        badge.innerText = '🔔 餐點已製作完成，請至櫃檯【可取餐】！';
+      } else if (status === '取餐完成') {
+        badge.className = 'status-badge bg-done';
+        badge.innerText = '🎉 已完成取餐，祝您用餐愉快！';
+      } else {
+        badge.className = 'status-badge bg-cooking';
+        badge.innerText = '⏳ 餐點製作中，請稍候...';
+      }
+    }
+
+    function startPolling(orderId) {
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = setInterval(async function() {
+        const res = await callGasApi('checkOrderStatus', { orderId: orderId });
+        if (res.success) {
+          updateStatusBadge(res.status);
+          if (res.status === '取餐完成') clearInterval(pollTimer);
+        }
+      }, 3000);
+    }
+
+    function resetToOrderForm() {
+      if (pollTimer) clearInterval(pollTimer);
+      document.getElementById('orderStatus').style.display = 'none';
+      document.getElementById('orderForm').style.display = 'block';
+      document.getElementById('submitBtn').disabled = false;
+      document.getElementById('submitBtn').innerText = '送出訂單';
+    }
+  </script>
+</body>
+</html>
