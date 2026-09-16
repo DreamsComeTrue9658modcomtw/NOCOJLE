@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>廚房出餐看板</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 10px; background: #f4f6f9; margin: 0; color: #333; }
+    .container { max-width: 900px; margin: auto; }
+    .login-box { background: white; padding: 25px; border-radius: 12px; max-width: 350px; margin: 60px auto; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+    .login-box input { width: 100%; padding: 12px; margin: 15px 0; border: 1px solid #ccc; border-radius: 6px; font-size: 16px; text-align: center; }
+    .login-box button { width: 100%; padding: 12px; background: #007bff; color: white; border: none; border-radius: 6px; font-weight: bold; font-size: 16px; cursor: pointer; }
+    .dashboard { display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; }
+    .card { flex: 1; min-width: 110px; background: white; padding: 10px 5px; border-radius: 8px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+    .card-title { font-size: 12px; color: #666; margin-bottom: 4px; }
+    .card-value { font-size: 16px; font-weight: bold; }
+    .audio-bar { background: #e8f4fd; border: 1px solid #b6d4fe; padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; text-align: center; font-size: 13px; color: #084298; }
+    .table-responsive { width: 100%; overflow-x: auto; background: white; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
+    table { width: 100%; border-collapse: collapse; min-width: 600px; }
+    th, td { padding: 10px 8px; text-align: left; font-size: 13px; border-bottom: 1px solid #eee; vertical-align: middle; }
+    th { background: #f8f9fa; color: #555; font-weight: 600; }
+    .btn-ready { background: #ffc107; color: #212529; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px; }
+    .btn-done { background: #28a745; color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px; }
+    .badge { padding: 4px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; display: inline-block; }
+    .badge-pending { background: #fff3cd; color: #856404; }
+    .badge-ready { background: #cff4fc; color: #055160; }
+    .badge-done { background: #d4edda; color: #155724; }
+    .order-id-tag { background: #e9ecef; padding: 2px 5px; border-radius: 4px; font-family: monospace; font-size: 11px; color: #495057; font-weight: bold; }
+  </style>
+</head>
+<body>
+
+  <div id="loginArea" class="login-box">
+    <h3 style="margin-top:0;">👨‍🍳 廚房後台登入</h3>
+    <input type="password" id="pwdInput" placeholder="請輸入管理密碼">
+    <button onclick="login()">登入後台</button>
+  </div>
+
+  <div id="adminMain" class="container" style="display:none;">
+    <h3 style="margin: 10px 0 15px 0; text-align: center;">廚房點餐看板 & 叫號出餐</h3>
+    
+    <div class="audio-bar" id="audioNotice">
+      🔔 語音提醒已啟用
+    </div>
+
+    <div class="dashboard">
+      <div class="card">
+        <div class="card-title">製作中</div>
+        <div class="card-value" id="pendingCount" style="color:#d9534f;">0 單</div>
+      </div>
+      <div class="card">
+        <div class="card-title">可取餐</div>
+        <div class="card-value" id="readyCount" style="color:#ffc107;">0 單</div>
+      </div>
+      <div class="card">
+        <div class="card-title">已完成</div>
+        <div class="card-value" id="completedCount" style="color:#28a745;">0 單</div>
+      </div>
+      <div class="card">
+        <div class="card-title">今日營收</div>
+        <div class="card-value" id="totalSales" style="color:#007bff;">NT$ 0</div>
+      </div>
+    </div>
+
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th>單號 / 時間</th>
+            <th>桌號</th>
+            <th>點餐明細</th>
+            <th>金額</th>
+            <th>狀態</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody">
+          <tr><td colspan="6" style="text-align:center; padding: 20px;">載入中...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycby6wjxckZ0oaBkGCKxhZi6zCLuE8M8dv83GLqGOhf65R8wR7W4zHWv26Xdq4FdYz6k/exec";
+
+    let adminPassword = "";
+    let lastPendingCount = 0;
+    let isFirstLoad = true;
+
+    async function callGasApi(actionName, payload = {}) {
+      try {
+        const response = await fetch(GAS_API_URL, {
+          method: "POST",
+          body: JSON.stringify({ action: actionName, ...payload })
+        });
+        return await response.json();
+      } catch (err) {
+        return { success: false, message: "網路通訊失敗：" + err.toString() };
+      }
+    }
+
+    async function login() {
+      const pwd = document.getElementById('pwdInput').value.trim();
+      const res = await callGasApi('verifyAdminPassword', { password: pwd });
+      if (res && res.success) {
+        adminPassword = pwd;
+        document.getElementById('loginArea').style.display = 'none';
+        document.getElementById('adminMain').style.display = 'block';
+        loadAdminData();
+        setInterval(loadAdminData, 4000);
+      } else {
+        alert('密碼錯誤！');
+      }
+    }
+
+    function playBeepAndSpeech(msgText) {
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.3);
+
+        if ('speechSynthesis' in window) {
+          setTimeout(() => {
+            const synth = window.speechSynthesis;
+            const utter = new SpeechSynthesisUtterance(msgText);
+            utter.lang = 'zh-TW';
+            synth.speak(utter);
+          }, 350);
+        }
+      } catch (e) {}
+    }
+
+    async function loadAdminData() {
+      const data = await callGasApi('getKitchenAdminData', { password: adminPassword });
+      if (!data || !data.success) return;
+
+      if (!isFirstLoad && data.pendingCount > lastPendingCount) {
+        const newestOrder = data.list.find(item => item.status === '出餐中');
+        playBeepAndSpeech('收到新訂單，' + (newestOrder ? newestOrder.tableNo : ''));
+      }
+
+      lastPendingCount = data.pendingCount;
+      isFirstLoad = false;
+
+      document.getElementById('pendingCount').innerText = data.pendingCount + ' 單';
+      document.getElementById('readyCount').innerText = data.readyCount + ' 單';
+      document.getElementById('completedCount').innerText = data.completedCount + ' 單';
+      document.getElementById('totalSales').innerText = 'NT$ ' + data.totalSales.toLocaleString();
+
+      const tbody = document.getElementById('tableBody');
+      if (data.list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 20px;">目前無訂單資料</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = '';
+      data.list.forEach(item => {
+        const tr = document.createElement('tr');
+        let actionBtn = '';
+        let badgeClass = 'badge-pending';
+
+        if (item.status === '出餐中') {
+          actionBtn = `<button class="btn-ready" onclick="updateStatus('${item.orderId}', '可取餐')">製作完成 (通知取餐)</button>`;
+          badgeClass = 'badge-pending';
+        } else if (item.status === '可取餐') {
+          actionBtn = `<button class="btn-done" onclick="updateStatus('${item.orderId}', '取餐完成')">顧客已取餐</button>`;
+          badgeClass = 'badge-ready';
+        } else {
+          actionBtn = `<span style="color:#aaa;">已結單</span>`;
+          badgeClass = 'badge-done';
+        }
+
+        tr.innerHTML = `
+          <td><span class="order-id-tag">${item.orderId}</span><br><span style="color:#888; font-size:11px;">${item.time}</span></td>
+          <td><strong>${item.tableNo}</strong></td>
+          <td>${item.items}${item.note ? '<br><span style="color:red;font-size:11px;">註:'+item.note+'</span>' : ''}</td>
+          <td><strong style="color:#e74c3c;">NT$ ${item.amount}</strong></td>
+          <td><span class="badge ${badgeClass}">${item.status}</span></td>
+          <td>${actionBtn}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function updateStatus(orderId, targetStatus) {
+      await callGasApi('updateOrderStatusByAdmin', {
+        orderId: orderId,
+        password: adminPassword,
+        targetStatus: targetStatus
+      });
+      loadAdminData();
+    }
+  </script>
+</body>
+</html>
