@@ -136,22 +136,32 @@
       initLiff();
     };
 
-    // 初始化 LINE LIFF 抓取顧客 LINE ID
-    async function initLiff() {
-      if (!MY_LIFF_ID || MY_LIFF_ID.includes("YOUR_LIFF_ID")) return;
-      try {
-        await liff.init({ liffId: MY_LIFF_ID });
-        if (liff.isLoggedIn()) {
-          const profile = await liff.getProfile();
-          lineUserId = profile.userId;
-        } else {
-          liff.login();
-        }
-      } catch (err) {
-        console.log("LIFF 初始化跳過或非 LINE 環境：", err);
-      }
+   // 初始化 LINE LIFF 抓取顧客 LINE ID
+async function initLiff() {
+  if (!MY_LIFF_ID || MY_LIFF_ID.includes("YOUR_LIFF_ID")) return;
+  try {
+    await liff.init({ liffId: MY_LIFF_ID });
+    
+    // 檢查若未登入，強制跳轉 LINE 授權登入
+    if (!liff.isLoggedIn()) {
+      liff.login();
+      return;
     }
+    
+    // 已登入，順利抓取 profile 資料
+    const profile = await liff.getProfile();
+    lineUserId = profile.userId;
+    console.log("✅ 成功取得 LINE User ID:", lineUserId);
 
+    // 介面提示
+    const locStatus = document.getElementById('locStatus');
+    if (locStatus) {
+      locStatus.innerText += ' (LINE 身份驗證成功)';
+    }
+  } catch (err) {
+    console.error("LIFF 初始化失敗：", err);
+  }
+}
     function getLocation() {
       const locStatus = document.getElementById('locStatus');
       if (navigator.geolocation) {
