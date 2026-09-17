@@ -136,7 +136,7 @@
       initLiff();
     };
 
-   // 初始化 LINE LIFF 抓取顧客 LINE ID
+    // 初始化 LINE LIFF 抓取顧客 LINE ID
 async function initLiff() {
   if (!MY_LIFF_ID || MY_LIFF_ID.includes("YOUR_LIFF_ID")) return;
   try {
@@ -162,6 +162,7 @@ async function initLiff() {
     console.error("LIFF 初始化失敗：", err);
   }
 }
+
     function getLocation() {
       const locStatus = document.getElementById('locStatus');
       if (navigator.geolocation) {
@@ -249,50 +250,59 @@ async function initLiff() {
     }
 
     async function submitOrder() {
-      const totalAmount = calculateTotal();
-      if (totalAmount === 0) { alert('請至少選擇一項餐點！'); return; }
-
-      const orderItems = [];
-      menuList.forEach(item => {
-        if (cart[item.id] > 0) {
-          orderItems.push({ name: item.name, qty: cart[item.id], price: item.price });
-        }
-      });
-
-      let finalTable = (currentType === 'takeout') ? '外帶打包' : '內用 - ' + document.getElementById('tableSelect').value;
-      const note = document.getElementById('orderNote').value.trim();
-      const backupCode = document.getElementById('backupCodeInput').value.trim();
-
-      const btn = document.getElementById('submitBtn');
-      btn.disabled = true;
-      btn.innerText = '傳送訂單中...';
-
-      const res = await callGasApi('submitOrder', {
-        data: {
-          tableNo: finalTable,
-          items: orderItems,
-          totalAmount: totalAmount,
-          note: note,
-          lat: userLat,
-          lng: userLng,
-          backupCode: backupCode,
-          lineUserId: lineUserId // 帶入 LINE User ID
-        }
-      });
-
-      if (res.success) {
-        let itemsHtml = '';
-        res.items.forEach(i => {
-          itemsHtml += `<div>${i.name} x${i.qty} - NT$ ${i.price * i.qty}</div>`;
-        });
-        showStatusUI(res.orderId, res.tableNo, res.totalAmount, itemsHtml, '出餐中');
-      } else {
-        alert(res.message || '點餐失敗');
-        document.getElementById('backupCodeGroup').style.display = 'block';
-        btn.disabled = false;
-        btn.innerText = '送出訂單';
-      }
+  // ===== 1. 檢查是否有未完成的訂單 (防止重複點餐) =====
+  if (lineUserId) {
+    const checkRes = await callGasApi('checkUnfinishedOrder', { lineUserId: lineUserId });
+    if (checkRes && checkRes.hasUnfinished) {
+      alert(`⚠️ 您目前有正在製作中的訂單 (單號：${checkRes.orderId})！\n\n為避免重複點餐，請等待上一筆訂單完成取餐後再重新下單。`);
+      return;
     }
+  }
+
+  const totalAmount = calculateTotal();
+  if (totalAmount === 0) { alert('請至少選擇一項餐點！'); return; }
+
+  const orderItems = [];
+  menuList.forEach(item => {
+    if (cart[item.id] > 0) {
+      orderItems.push({ name: item.name, qty: cart[item.id], price: item.price });
+    }
+  });
+
+  let finalTable = (currentType === 'takeout') ? '外帶打包' : '內用 - ' + document.getElementById('tableSelect').value;
+  const note = document.getElementById('orderNote').value.trim();
+  const backupCode = document.getElementById('backupCodeInput').value.trim();
+
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.innerText = '傳送訂單中...';
+
+  const res = await callGasApi('submitOrder', {
+    data: {
+      tableNo: finalTable,
+      items: orderItems,
+      totalAmount: totalAmount,
+      note: note,
+      lat: userLat,
+      lng: userLng,
+      backupCode: backupCode,
+      lineUserId: lineUserId // 帶入 LINE User ID
+    }
+  });
+
+  if (res.success) {
+    let itemsHtml = '';
+    res.items.forEach(i => {
+      itemsHtml += `<div>${i.name} x${i.qty} - NT$ ${i.price * i.qty}</div>`;
+    });
+    showStatusUI(res.orderId, res.tableNo, res.totalAmount, itemsHtml, '出餐中');
+  } else {
+    alert(res.message || '點餐失敗');
+    document.getElementById('backupCodeGroup').style.display = 'block';
+    btn.disabled = false;
+    btn.innerText = '送出訂單';
+  }
+}
 
     async function queryOrderDirectly() {
       const qId = document.getElementById('queryOrderId').value.trim();
