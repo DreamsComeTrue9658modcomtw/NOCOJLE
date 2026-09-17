@@ -33,7 +33,7 @@
 
   <div id="loginArea" class="login-box">
     <h3 style="margin-top:0;">👨‍🍳 廚房後台登入</h3>
-    <input type="password" id="pwdInput" placeholder="請輸入管理密碼">
+    <input type="password" id="pwdInput" placeholder="請輸入管理密碼 (預設: 9898)">
     <button onclick="login()">登入後台</button>
   </div>
 
@@ -41,7 +41,7 @@
     <h3 style="margin: 10px 0 15px 0; text-align: center;">廚房點餐看板 & 叫號出餐</h3>
     
     <div class="audio-bar" id="audioNotice">
-      🔔 語音提醒已啟用 (請點擊頁面任意處解鎖瀏覽器聲音)
+      🔔 語音提醒已啟用
     </div>
 
     <div class="dashboard">
@@ -83,14 +83,12 @@
   </div>
 
   <script>
-    // 【可自訂】Google Apps Script 後端 API 網址 (若有重新部署可更換)
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycby6wjxckZ0oaBkGCKxhZi6zCLuE8M8dv83GLqGOhf65R8wR7W4zHWv26Xdq4FdYz6k/exec";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxkIogSJuo8P7kxJ6xwlCCUt1NVOyxPacEvzaubB9X2Cwz3KxYJTd_dwqlprm_iHTc/exec";
 
     let adminPassword = "";
     let lastPendingCount = 0;
     let isFirstLoad = true;
 
-    // 呼叫 GAS 後端通用 API 函式
     async function callGasApi(actionName, payload = {}) {
       try {
         const response = await fetch(GAS_API_URL, {
@@ -103,7 +101,6 @@
       }
     }
 
-    // 登入驗證
     async function login() {
       const pwd = document.getElementById('pwdInput').value.trim();
       const res = await callGasApi('verifyAdminPassword', { password: pwd });
@@ -112,84 +109,53 @@
         document.getElementById('loginArea').style.display = 'none';
         document.getElementById('adminMain').style.display = 'block';
         loadAdminData();
-        
-        // 【可自訂】自動刷頁更新時間間隔（目前設為 4000毫秒 = 4秒）
-        setInterval(loadAdminData, 4000); 
+        setInterval(loadAdminData, 4000);
       } else {
         alert('密碼錯誤！');
       }
     }
 
-    // ===== 🔊 蜂鳴器與語音播報設定核心區塊 =====
     function playBeepAndSpeech(msgText) {
       try {
-        // --- 1. 嗶嗶聲 (Beep) 設定 ---
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
         osc.connect(gain);
         gain.connect(audioCtx.destination);
-        
-        osc.type = 'sine'; // 聲音波形：sine (正弦波), square (方波), triangle (三角波)
-        
-        // 【可自訂】聲音頻率（預設 880Hz，數值越大聲音越尖銳）
-        osc.frequency.setValueAtTime(880, audioCtx.currentTime); 
-        
-        // 【可自訂】嗶嗶聲音量大小（範圍 0.0 ~ 1.0，預設 0.1）
-        gain.gain.setValueAtTime(0.5, audioCtx.currentTime); 
-        
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
         osc.start();
-        
-        // 【可自訂】嗶嗶聲響聲長度（預設 0.3 秒）
-        osc.stop(audioCtx.currentTime + 0.8); 
+        osc.stop(audioCtx.currentTime + 0.3);
 
-        // --- 2. 語音朗讀 (SpeechSynthesis) 設定 ---
         if ('speechSynthesis' in window) {
           setTimeout(() => {
             const synth = window.speechSynthesis;
             const utter = new SpeechSynthesisUtterance(msgText);
-            
-            utter.lang = 'zh-TW'; // 發音語言：繁體中文
-
-            // ----------------------------------------------------
-            // 💡【可自行取消註解開啟】語音進階參數設定：
-            // ----------------------------------------------------
-            // utter.rate = 1.2;  // 語速：0.1 ~ 10（預設 1.0，設 1.2 可讓播報更迅速）
-             utter.pitch = 1.2; // 音調：0 ~ 2（預設 1.0，設 1.2 聲音更穿透高昂）
-             utter.volume = 1.0;// 音量：0 ~ 1（預設 1.0）
-            // ----------------------------------------------------
-
+            utter.lang = 'zh-TW';
             synth.speak(utter);
-          }, 500); // 嗶嗶聲響完後延遲 0.35 秒開始朗讀
+          }, 350);
         }
-      } catch (e) {
-        console.log("語音播放受阻，請確保已點擊過網頁畫面。");
-      }
+      } catch (e) {}
     }
 
-    // 讀取後端廚房看板資料
     async function loadAdminData() {
       const data = await callGasApi('getKitchenAdminData', { password: adminPassword });
       if (!data || !data.success) return;
 
-      // 當新增「出餐中」訂單時，觸發語音提示
       if (!isFirstLoad && data.pendingCount > lastPendingCount) {
         const newestOrder = data.list.find(item => item.status === '出餐中');
-        
-        // 【可自訂】語音播報開頭詞（預設：收到新訂單，+ 桌號）
         playBeepAndSpeech('收到新訂單，' + (newestOrder ? newestOrder.tableNo : ''));
       }
 
       lastPendingCount = data.pendingCount;
       isFirstLoad = false;
 
-      // 更新看板數據資訊
       document.getElementById('pendingCount').innerText = data.pendingCount + ' 單';
       document.getElementById('readyCount').innerText = data.readyCount + ' 單';
       document.getElementById('completedCount').innerText = data.completedCount + ' 單';
       document.getElementById('totalSales').innerText = 'NT$ ' + data.totalSales.toLocaleString();
 
-      // 繪製訂單表格內容
       const tbody = document.getElementById('tableBody');
       if (data.list.length === 0) {
         tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 20px;">目前無訂單資料</td></tr>';
@@ -225,7 +191,6 @@
       });
     }
 
-    // 更新訂單狀態（製作完成 / 已取餐）
     async function updateStatus(orderId, targetStatus) {
       await callGasApi('updateOrderStatusByAdmin', {
         orderId: orderId,
