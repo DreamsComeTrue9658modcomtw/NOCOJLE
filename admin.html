@@ -2,121 +2,92 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>智慧自助點餐系統</title>
-  <!-- 引入 LINE LIFF SDK -->
-  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>廚房出餐看板</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 15px; background: #f8f9fa; margin: 0; }
-    .card { background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.08); max-width: 450px; margin: auto; }
-    h2 { margin-top: 0; color: #2c3e50; text-align: center; }
-    .form-group { margin-bottom: 15px; }
-    label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; }
-    select, input[type="text"], textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
-    .type-toggle { display: flex; gap: 10px; margin-bottom: 12px; }
-    .type-btn { flex: 1; padding: 10px; border: 2px solid #007bff; background: #fff; color: #007bff; border-radius: 6px; font-weight: bold; font-size: 15px; cursor: pointer; text-align: center; }
-    .type-btn.active { background: #007bff; color: #fff; }
-    .menu-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px dashed #eee; }
-    .menu-info { flex-grow: 1; }
-    .menu-name { font-weight: bold; font-size: 16px; }
-    .menu-price { color: #e74c3c; font-weight: bold; margin-top: 2px; }
-    .qty-ctrl { display: flex; align-items: center; gap: 8px; }
-    .qty-btn { width: 30px; height: 30px; background: #e9ecef; border: none; border-radius: 50%; font-size: 18px; font-weight: bold; cursor: pointer; }
-    button.submit-btn { width: 100%; background: #27ae60; color: white; border: none; padding: 12px; border-radius: 6px; font-size: 18px; font-weight: bold; cursor: pointer; margin-top: 15px; }
-    button:disabled { background: #ccc; }
-    .status-badge { display: block; text-align: center; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 18px; margin-bottom: 15px; }
-    .bg-cooking { background: #fff3cd; color: #856404; }
-    .bg-ready { background: #cff4fc; color: #055160; border: 2px solid #0dcaf0; animation: pulse 1.5s infinite; }
-    .bg-done { background: #d4edda; color: #155724; }
-    @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.02); } 100% { transform: scale(1); } }
-    .loc-info { background: #e8f4fd; color: #0d6efd; font-size: 12px; padding: 8px; border-radius: 6px; margin-bottom: 12px; text-align: center; }
-    .query-box { margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee; text-align: center; }
-    .btn-query { background: #17a2b8; color: white; border: none; padding: 8px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; }
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 10px; background: #f4f6f9; margin: 0; color: #333; }
+    .container { max-width: 900px; margin: auto; }
+    .login-box { background: white; padding: 25px; border-radius: 12px; max-width: 350px; margin: 60px auto; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+    .login-box input { width: 100%; padding: 12px; margin: 15px 0; border: 1px solid #ccc; border-radius: 6px; font-size: 16px; text-align: center; }
+    .login-box button { width: 100%; padding: 12px; background: #007bff; color: white; border: none; border-radius: 6px; font-weight: bold; font-size: 16px; cursor: pointer; }
+    .dashboard { display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; }
+    .card { flex: 1; min-width: 110px; background: white; padding: 10px 5px; border-radius: 8px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+    .card-title { font-size: 12px; color: #666; margin-bottom: 4px; }
+    .card-value { font-size: 16px; font-weight: bold; }
+    .audio-bar { background: #e8f4fd; border: 1px solid #b6d4fe; padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; text-align: center; font-size: 13px; color: #084298; }
+    .table-responsive { width: 100%; overflow-x: auto; background: white; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
+    table { width: 100%; border-collapse: collapse; min-width: 600px; }
+    th, td { padding: 10px 8px; text-align: left; font-size: 13px; border-bottom: 1px solid #eee; vertical-align: middle; }
+    th { background: #f8f9fa; color: #555; font-weight: 600; }
+    .btn-ready { background: #ffc107; color: #212529; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px; }
+    .btn-done { background: #28a745; color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px; }
+    .badge { padding: 4px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; display: inline-block; }
+    .badge-pending { background: #fff3cd; color: #856404; }
+    .badge-ready { background: #cff4fc; color: #055160; }
+    .badge-done { background: #d4edda; color: #155724; }
+    .order-id-tag { background: #e9ecef; padding: 2px 5px; border-radius: 4px; font-family: monospace; font-size: 11px; color: #495057; font-weight: bold; }
   </style>
 </head>
 <body>
-  <div class="card">
-    <h2>🍽️ 智慧自助點餐</h2>
+
+  <div id="loginArea" class="login-box">
+    <h3 style="margin-top:0;">👨‍🍳 廚房後台登入</h3>
+    <input type="password" id="pwdInput" placeholder="請輸入管理密碼 (預設: 9898)">
+    <button onclick="login()">登入後台</button>
+  </div>
+
+  <div id="adminMain" class="container" style="display:none;">
+    <h3 style="margin: 10px 0 15px 0; text-align: center;">廚房點餐看板 & 叫號出餐</h3>
     
-    <div id="orderForm">
-      <div id="locStatus" class="loc-info">📍 正在獲取現場位置資訊...</div>
+    <div class="audio-bar" id="audioNotice">
+      🔔 語音提醒已啟用
+    </div>
 
-      <div class="form-group">
-        <label>用餐方式</label>
-        <div class="type-toggle">
-          <div id="btnDineIn" class="type-btn active" onclick="setDiningType('dineIn')">🍽️ 內用</div>
-          <div id="btnTakeout" class="type-btn" onclick="setDiningType('takeout')">🛍️ 外帶</div>
-        </div>
+    <div class="dashboard">
+      <div class="card">
+        <div class="card-title">製作中</div>
+        <div class="card-value" id="pendingCount" style="color:#d9534f;">0 單</div>
       </div>
-
-      <div class="form-group" id="tableGroup">
-        <label>選擇桌號</label>
-        <select id="tableSelect">
-          <option value="桌號 1">桌號 1</option>
-          <option value="桌號 2">桌號 2</option>
-          <option value="桌號 3">桌號 3</option>
-          <option value="桌號 5">桌號 5</option>
-          <option value="桌號 6">桌號 6</option>
-        </select>
+      <div class="card">
+        <div class="card-title">可取餐</div>
+        <div class="card-value" id="readyCount" style="color:#ffc107;">0 單</div>
       </div>
-
-      <div class="form-group">
-        <label>選擇餐點</label>
-        <div id="menuContainer">載入菜單中...</div>
+      <div class="card">
+        <div class="card-title">已完成</div>
+        <div class="card-value" id="completedCount" style="color:#28a745;">0 單</div>
       </div>
-
-      <div class="form-group">
-        <label>備註需求</label>
-        <textarea id="orderNote" rows="2" placeholder="例如：去冰、不加蔥..."></textarea>
-      </div>
-
-      <div class="form-group" id="backupCodeGroup" style="display:none; background:#fff3cd; padding:10px; border-radius:6px;">
-        <label style="color:#856404; font-size:13px;">⚠️ 無法取得精準定位，請輸入現場驗證碼：</label>
-        <input type="text" id="backupCodeInput" placeholder="請向櫃檯詢問驗證碼 (預設: 8888)">
-      </div>
-
-      <div style="text-align: right; font-size: 18px; font-weight: bold; margin-top: 10px;">
-        合計金額：<span id="totalDisplay" style="color: #e74c3c;">NT$ 0</span>
-      </div>
-
-      <button id="submitBtn" class="submit-btn" onclick="submitOrder()">送出訂單</button>
-
-      <div class="query-box">
-        <label style="font-size:13px; color:#666;">已有訂單？輸入單號查詢進度：</label>
-        <div style="display:flex; gap:5px; margin-top:5px;">
-          <input type="text" id="queryOrderId" placeholder="例如: 123456">
-          <button class="btn-query" onclick="queryOrderDirectly()">查詢</button>
-        </div>
+      <div class="card">
+        <div class="card-title">今日營收</div>
+        <div class="card-value" id="totalSales" style="color:#007bff;">NT$ 0</div>
       </div>
     </div>
 
-    <div id="orderStatus" style="display:none;">
-      <div id="statusBadge" class="status-badge bg-cooking">⏳ 餐點製作中，請稍候...</div>
-      <div style="text-align: center; margin-bottom: 15px;">
-        <span style="font-size: 14px; color: #666;">訂單編號</span>
-        <h3 id="displayOrderId" style="color:#2c3e50; margin: 5px 0;"></h3>
-        <p id="displayTable" style="font-weight: bold; color: #333; margin:0;"></p>
-      </div>
-      <div id="summaryItems" style="background:#f9f9f9; padding: 10px; border-radius: 8px; font-size: 14px; margin-bottom: 15px;"></div>
-      <div style="text-align: center; font-size: 20px; font-weight: bold; color: #e74c3c; margin-bottom: 15px;">
-        總金額：<span id="displayTotal"></span>
-      </div>
-      <button class="submit-btn" style="background:#6c757d;" onclick="resetToOrderForm()">返回點餐頁面</button>
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th>單號 / 時間</th>
+            <th>桌號</th>
+            <th>點餐明細</th>
+            <th>金額</th>
+            <th>狀態</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody">
+          <tr><td colspan="6" style="text-align:center; padding: 20px;">載入中...</td></tr>
+        </tbody>
+      </table>
     </div>
   </div>
 
   <script>
-    // ===== 【設定區】 =====
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxkIogSJuo8P7kxJ6xwlCCUt1NVOyxPacEvzaubB9X2Cwz3KxYJTd_dwqlprm_iHTc/exec"; // GAS 部署 URL
-    const MY_LIFF_ID = "2007435365-EaqRS21R"; // 請替換為您在 LINE Developers 申請到的 LIFF ID
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxkIogSJuo8P7kxJ6xwlCCUt1NVOyxPacEvzaubB9X2Cwz3KxYJTd_dwqlprm_iHTc/exec";
 
-    let menuList = [];
-    let cart = {};
-    let pollTimer = null;
-    let currentType = 'dineIn';
-    let userLat = null;
-    let userLng = null;
-    let lineUserId = ""; // 存放顧客 LINE ID
+    let adminPassword = "";
+    let lastPendingCount = 0;
+    let isFirstLoad = true;
 
     async function callGasApi(actionName, payload = {}) {
       try {
@@ -130,234 +101,103 @@
       }
     }
 
-    window.onload = async function() {
-      getLocation();
-      loadMenu();
-      initLiff();
-    };
-
-    // 初始化 LINE LIFF 抓取顧客 LINE ID
-async function initLiff() {
-  if (!MY_LIFF_ID || MY_LIFF_ID.includes("YOUR_LIFF_ID")) return;
-  try {
-    await liff.init({ liffId: MY_LIFF_ID });
-    
-    // 檢查若未登入，強制跳轉 LINE 授權登入
-    if (!liff.isLoggedIn()) {
-      liff.login();
-      return;
-    }
-    
-    // 已登入，順利抓取 profile 資料
-    const profile = await liff.getProfile();
-    lineUserId = profile.userId;
-    console.log("✅ 成功取得 LINE User ID:", lineUserId);
-
-    // 介面提示
-    const locStatus = document.getElementById('locStatus');
-    if (locStatus) {
-      locStatus.innerText += ' (LINE 身份驗證成功)';
-    }
-  } catch (err) {
-    console.error("LIFF 初始化失敗：", err);
-  }
-}
-
-    function getLocation() {
-      const locStatus = document.getElementById('locStatus');
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          function(position) {
-            userLat = position.coords.latitude;
-            userLng = position.coords.longitude;
-            locStatus.style.background = '#d4edda';
-            locStatus.style.color = '#155724';
-            locStatus.innerText = '✅ 已成功取得現場位置防偽認證';
-          },
-          function(error) {
-            locStatus.style.background = '#f8d7da';
-            locStatus.style.color = '#721c24';
-            locStatus.innerText = '⚠️ 無法讀取位置，請使用備用驗證碼';
-            document.getElementById('backupCodeGroup').style.display = 'block';
-          },
-          { enableHighAccuracy: true, timeout: 8000 }
-        );
+    async function login() {
+      const pwd = document.getElementById('pwdInput').value.trim();
+      const res = await callGasApi('verifyAdminPassword', { password: pwd });
+      if (res && res.success) {
+        adminPassword = pwd;
+        document.getElementById('loginArea').style.display = 'none';
+        document.getElementById('adminMain').style.display = 'block';
+        loadAdminData();
+        setInterval(loadAdminData, 4000);
       } else {
-        document.getElementById('backupCodeGroup').style.display = 'block';
+        alert('密碼錯誤！');
       }
     }
 
-    function setDiningType(type) {
-      currentType = type;
-      const btnIn = document.getElementById('btnDineIn');
-      const btnOut = document.getElementById('btnTakeout');
-      const tableGroup = document.getElementById('tableGroup');
+    function playBeepAndSpeech(msgText) {
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.3);
 
-      if (type === 'dineIn') {
-        btnIn.classList.add('active');
-        btnOut.classList.remove('active');
-        tableGroup.style.display = 'block';
-      } else {
-        btnOut.classList.add('active');
-        btnIn.classList.remove('active');
-        tableGroup.style.display = 'none';
-      }
+        if ('speechSynthesis' in window) {
+          setTimeout(() => {
+            const synth = window.speechSynthesis;
+            const utter = new SpeechSynthesisUtterance(msgText);
+            utter.lang = 'zh-TW';
+            synth.speak(utter);
+          }, 350);
+        }
+      } catch (e) {}
     }
 
-    async function loadMenu() {
-      const list = await callGasApi('getMenuList');
-      menuList = list || [];
-      const container = document.getElementById('menuContainer');
-      if (menuList.length === 0) {
-        container.innerHTML = '<p style="color:#999;">目前無可選餐點</p>';
+    async function loadAdminData() {
+      const data = await callGasApi('getKitchenAdminData', { password: adminPassword });
+      if (!data || !data.success) return;
+
+      if (!isFirstLoad && data.pendingCount > lastPendingCount) {
+        const newestOrder = data.list.find(item => item.status === '出餐中');
+        playBeepAndSpeech('收到新訂單，' + (newestOrder ? newestOrder.tableNo : ''));
+      }
+
+      lastPendingCount = data.pendingCount;
+      isFirstLoad = false;
+
+      document.getElementById('pendingCount').innerText = data.pendingCount + ' 單';
+      document.getElementById('readyCount').innerText = data.readyCount + ' 單';
+      document.getElementById('completedCount').innerText = data.completedCount + ' 單';
+      document.getElementById('totalSales').innerText = 'NT$ ' + data.totalSales.toLocaleString();
+
+      const tbody = document.getElementById('tableBody');
+      if (data.list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 20px;">目前無訂單資料</td></tr>';
         return;
       }
 
-      container.innerHTML = '';
-      menuList.forEach(item => {
-        cart[item.id] = 0;
-        const div = document.createElement('div');
-        div.className = 'menu-item';
-        div.innerHTML = `
-          <div class="menu-info">
-            <div class="menu-name">${item.name}</div>
-            <div class="menu-price">NT$ ${item.price}</div>
-          </div>
-          <div class="qty-ctrl">
-            <button class="qty-btn" onclick="updateQty('${item.id}', -1)">-</button>
-            <span id="qty-${item.id}">0</span>
-            <button class="qty-btn" onclick="updateQty('${item.id}', 1)">+</button>
-          </div>
-        `;
-        container.appendChild(div);
-      });
-    }
+      tbody.innerHTML = '';
+      data.list.forEach(item => {
+        const tr = document.createElement('tr');
+        let actionBtn = '';
+        let badgeClass = 'badge-pending';
 
-    function updateQty(id, change) {
-      if (!cart[id]) cart[id] = 0;
-      cart[id] = Math.max(0, cart[id] + change);
-      document.getElementById('qty-' + id).innerText = cart[id];
-      calculateTotal();
-    }
-
-    function calculateTotal() {
-      let total = 0;
-      menuList.forEach(item => {
-        total += (cart[item.id] || 0) * item.price;
-      });
-      document.getElementById('totalDisplay').innerText = 'NT$ ' + total;
-      return total;
-    }
-
-    async function submitOrder() {
-  // ===== 1. 檢查是否有未完成的訂單 (防止重複點餐) =====
-  if (lineUserId) {
-    const checkRes = await callGasApi('checkUnfinishedOrder', { lineUserId: lineUserId });
-    if (checkRes && checkRes.hasUnfinished) {
-      alert(`⚠️ 您目前有正在製作中的訂單 (單號：${checkRes.orderId})！\n\n為避免重複點餐，請等待上一筆訂單完成取餐後再重新下單。`);
-      return;
-    }
-  }
-
-  const totalAmount = calculateTotal();
-  if (totalAmount === 0) { alert('請至少選擇一項餐點！'); return; }
-
-  const orderItems = [];
-  menuList.forEach(item => {
-    if (cart[item.id] > 0) {
-      orderItems.push({ name: item.name, qty: cart[item.id], price: item.price });
-    }
-  });
-
-  let finalTable = (currentType === 'takeout') ? '外帶打包' : '內用 - ' + document.getElementById('tableSelect').value;
-  const note = document.getElementById('orderNote').value.trim();
-  const backupCode = document.getElementById('backupCodeInput').value.trim();
-
-  const btn = document.getElementById('submitBtn');
-  btn.disabled = true;
-  btn.innerText = '傳送訂單中...';
-
-  const res = await callGasApi('submitOrder', {
-    data: {
-      tableNo: finalTable,
-      items: orderItems,
-      totalAmount: totalAmount,
-      note: note,
-      lat: userLat,
-      lng: userLng,
-      backupCode: backupCode,
-      lineUserId: lineUserId // 帶入 LINE User ID
-    }
-  });
-
-  if (res.success) {
-    let itemsHtml = '';
-    res.items.forEach(i => {
-      itemsHtml += `<div>${i.name} x${i.qty} - NT$ ${i.price * i.qty}</div>`;
-    });
-    showStatusUI(res.orderId, res.tableNo, res.totalAmount, itemsHtml, '出餐中');
-  } else {
-    alert(res.message || '點餐失敗');
-    document.getElementById('backupCodeGroup').style.display = 'block';
-    btn.disabled = false;
-    btn.innerText = '送出訂單';
-  }
-}
-
-    async function queryOrderDirectly() {
-      const qId = document.getElementById('queryOrderId').value.trim();
-      if (!qId) return alert('請輸入訂單編號');
-
-      const res = await callGasApi('checkOrderStatus', { orderId: qId });
-      if (res.success) {
-        showStatusUI(res.orderId, res.tableNo, res.amount, res.items, res.status);
-      } else {
-        alert('找不到該筆訂單編號！');
-      }
-    }
-
-    function showStatusUI(orderId, tableNo, amount, itemsHtml, status) {
-      document.getElementById('orderForm').style.display = 'none';
-      document.getElementById('orderStatus').style.display = 'block';
-      document.getElementById('displayOrderId').innerText = orderId;
-      document.getElementById('displayTable').innerText = tableNo;
-      document.getElementById('displayTotal').innerText = 'NT$ ' + amount;
-      document.getElementById('summaryItems').innerHTML = itemsHtml;
-      updateStatusBadge(status);
-      startPolling(orderId);
-    }
-
-    function updateStatusBadge(status) {
-      const badge = document.getElementById('statusBadge');
-      if (status === '可取餐') {
-        badge.className = 'status-badge bg-ready';
-        badge.innerText = '🔔 餐點已製作完成，請至櫃檯【可取餐】！';
-      } else if (status === '取餐完成') {
-        badge.className = 'status-badge bg-done';
-        badge.innerText = '🎉 已完成取餐，祝您用餐愉快！';
-      } else {
-        badge.className = 'status-badge bg-cooking';
-        badge.innerText = '⏳ 餐點製作中，請稍候...';
-      }
-    }
-
-    function startPolling(orderId) {
-      if (pollTimer) clearInterval(pollTimer);
-      pollTimer = setInterval(async function() {
-        const res = await callGasApi('checkOrderStatus', { orderId: orderId });
-        if (res.success) {
-          updateStatusBadge(res.status);
-          if (res.status === '取餐完成') clearInterval(pollTimer);
+        if (item.status === '出餐中') {
+          actionBtn = `<button class="btn-ready" onclick="updateStatus('${item.orderId}', '可取餐')">製作完成 (通知取餐)</button>`;
+          badgeClass = 'badge-pending';
+        } else if (item.status === '可取餐') {
+          actionBtn = `<button class="btn-done" onclick="updateStatus('${item.orderId}', '取餐完成')">顧客已取餐</button>`;
+          badgeClass = 'badge-ready';
+        } else {
+          actionBtn = `<span style="color:#aaa;">已結單</span>`;
+          badgeClass = 'badge-done';
         }
-      }, 3000);
+
+        tr.innerHTML = `
+          <td><span class="order-id-tag">${item.orderId}</span><br><span style="color:#888; font-size:11px;">${item.time}</span></td>
+          <td><strong>${item.tableNo}</strong></td>
+          <td>${item.items}${item.note ? '<br><span style="color:red;font-size:11px;">註:'+item.note+'</span>' : ''}</td>
+          <td><strong style="color:#e74c3c;">NT$ ${item.amount}</strong></td>
+          <td><span class="badge ${badgeClass}">${item.status}</span></td>
+          <td>${actionBtn}</td>
+        `;
+        tbody.appendChild(tr);
+      });
     }
 
-    function resetToOrderForm() {
-      if (pollTimer) clearInterval(pollTimer);
-      document.getElementById('orderStatus').style.display = 'none';
-      document.getElementById('orderForm').style.display = 'block';
-      document.getElementById('submitBtn').disabled = false;
-      document.getElementById('submitBtn').innerText = '送出訂單';
+    async function updateStatus(orderId, targetStatus) {
+      await callGasApi('updateOrderStatusByAdmin', {
+        orderId: orderId,
+        password: adminPassword,
+        targetStatus: targetStatus
+      });
+      loadAdminData();
     }
   </script>
 </body>
