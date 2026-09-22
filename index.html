@@ -249,59 +249,91 @@ async function initLiff() {
       return total;
     }
 
-    async function submitOrder() {
-  // ===== 1. 檢查是否有未完成的訂單 (防止重複點餐) =====
-  if (lineUserId) {
-    const checkRes = await callGasApi('checkUnfinishedOrder', { lineUserId: lineUserId });
-    if (checkRes && checkRes.hasUnfinished) {
-      alert(`⚠️ 您目前有正在製作中的訂單 (單號：${checkRes.orderId})！\n\n為避免重複點餐，請等待上一筆訂單完成取餐後再重新下單。`);
-      return;
-    }
-  }
-
-  const totalAmount = calculateTotal();
-  if (totalAmount === 0) { alert('請至少選擇一項餐點！'); return; }
-
-  const orderItems = [];
-  menuList.forEach(item => {
-    if (cart[item.id] > 0) {
-      orderItems.push({ name: item.name, qty: cart[item.id], price: item.price });
-    }
-  });
-
-  let finalTable = (currentType === 'takeout') ? '外帶打包' : '內用 - ' + document.getElementById('tableSelect').value;
-  const note = document.getElementById('orderNote').value.trim();
-  const backupCode = document.getElementById('backupCodeInput').value.trim();
-
+   // 優化後的 submitOrder 函數
+async function submitOrder() {
   const btn = document.getElementById('submitBtn');
+  
+  // 【關鍵修正 1】第一時間同步鎖定按鈕，防止快速重複點擊
+  if (btn.disabled) return;
   btn.disabled = true;
-  btn.innerText = '傳送訂單中...';
+  btn.innerText = '處理中，請稍候...';
 
-  const res = await callGasApi('submitOrder', {
-    data: {
-      tableNo: finalTable,
-      items: orderItems,
-      totalAmount: totalAmount,
-      note: note,
-      lat: userLat,
-      lng: userLng,
-      backupCode: backupCode,
-      lineUserId: lineUserId // 帶入 LINE User ID
+  try {
+    const totalAmount = calculateTotal();
+    if (totalAmount === 0) { 
+      alert('請至少選擇一項餐點！'); 
+      btn.disabled = false;
+      btn.innerText = '送出訂單';
+      return; 
     }
-  });
 
-  if (res.success) {
-    let itemsHtml = '';
-    res.items.forEach(i => {
-      itemsHtml += `<div>${i.name} x${i.qty} - NT$ ${i.price * i.qty}</div>`;
+    // 【關鍵修正 2】檢查是否有未完成的訂單
+    if (lineUserId) {
+      const checkRes = await callGasApi('checkUnfinishedOrder', { lineUserId: lineUserId });
+      if (checkRes && checkRes.hasUnfinished) {
+        alert(`⚠️ 您目前有正在製作中的訂單 (單號：${checkRes.orderId})！\n\n為避免重複點餐，請等待上一筆訂單完成取餐後再重新下單。`);
+        btn.disabled = false;
+        btn.innerText = '送出訂單';
+        return;
+      }
+    }
+
+    const orderItems = [];
+    menuList.forEach(item => {
+      if (cart[item.id] > 0) {
+        orderItems.push({ name: item.name, qty: cart[item.id], price: item.price });
+      }
     });
-    showStatusUI(res.orderId, res.tableNo, res.totalAmount, itemsHtml, '出餐中');
-  } else {
-    alert(res.message || '點餐失敗');
-    document.getElementById('backupCodeGroup').style.display = 'block';
+
+    let finalTable = (currentType === 'takeout') ? '外帶打包' : '內用 - ' + document.getElementById('tableSelect').value;
+    const note = document.getElementById('orderNote').value.trim();
+    const backupCode = document.getElementById('backupCodeInput').value.trim();
+
+    const res = await callGasApi('submitOrder', {
+      data: {
+        tableNo: finalTable,
+        items: orderItems,
+        totalAmount: totalAmount,
+        note: note,
+        lat: userLat,
+        lng: userLng,
+        backupCode: backupCode,
+        lineUserId: lineUserId
+      }
+    });
+
+    if (res.success) {
+      let itemsHtml = '';
+      res.items.forEach(i => {
+        itemsHtml += `<div>${i.name} x${i.qty} - NT$ ${i.price * i.qty}</div>`;
+      });
+      
+      // 【關鍵修正 3】下單成功後清空購物車與輸入欄位
+      resetCartData();
+      
+      showStatusUI(res.orderId, res.tableNo, res.totalAmount, itemsHtml, '出餐中');
+    } else {
+      alert(res.message || '點餐失敗');
+      document.getElementById('backupCodeGroup').style.display = 'block';
+      btn.disabled = false;
+      btn.innerText = '送出訂單';
+    }
+  } catch (e) {
+    alert('系統發生錯誤：' + e.toString());
     btn.disabled = false;
     btn.innerText = '送出訂單';
   }
+}
+
+// 清空購物車輔助函數
+function resetCartData() {
+  menuList.forEach(item => {
+    cart[item.id] = 0;
+    const qtyElem = document.getElementById('qty-' + item.id);
+    if (qtyElem) qtyElem.innerText = '0';
+  });
+  document.getElementById('orderNote').value = '';
+  calculateTotal();
 }
 
     async function queryOrderDirectly() {
