@@ -389,6 +389,8 @@ function resetCartData() {
       document.getElementById('orderForm').style.display = 'block';
       document.getElementById('submitBtn').disabled = false;
       document.getElementById('submitBtn').innerText = '送出訂單';
+      // 建議加上這行，避免返回後數量還在
+      if (typeof resetCartData === 'function') resetCartData();
     }
   </script>
 </body>
