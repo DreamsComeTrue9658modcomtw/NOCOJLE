@@ -249,33 +249,32 @@ async function initLiff() {
       return total;
     }
 
-   // 優化後的 submitOrder 函數
+   // ===== 全域變數（放在 script 最上方其他變數附近）=====
+let isSubmitting = false;   // 防止重複送出
+
 async function submitOrder() {
+  // 立刻鎖定，防止連點
+  if (isSubmitting) return;
+  isSubmitting = true;
+
   const btn = document.getElementById('submitBtn');
-  
-  // 【關鍵修正 1】第一時間同步鎖定按鈕，防止快速重複點擊
-  if (btn.disabled) return;
   btn.disabled = true;
-  btn.innerText = '處理中，請稍候...';
+  btn.innerText = '傳送訂單中...';
 
   try {
-    const totalAmount = calculateTotal();
-    if (totalAmount === 0) { 
-      alert('請至少選擇一項餐點！'); 
-      btn.disabled = false;
-      btn.innerText = '送出訂單';
-      return; 
-    }
-
-    // 【關鍵修正 2】檢查是否有未完成的訂單
+    // ===== 1. 檢查是否有未完成的訂單 =====
     if (lineUserId) {
       const checkRes = await callGasApi('checkUnfinishedOrder', { lineUserId: lineUserId });
       if (checkRes && checkRes.hasUnfinished) {
         alert(`⚠️ 您目前有正在製作中的訂單 (單號：${checkRes.orderId})！\n\n為避免重複點餐，請等待上一筆訂單完成取餐後再重新下單。`);
-        btn.disabled = false;
-        btn.innerText = '送出訂單';
         return;
       }
+    }
+
+    const totalAmount = calculateTotal();
+    if (totalAmount === 0) {
+      alert('請至少選擇一項餐點！');
+      return;
     }
 
     const orderItems = [];
@@ -307,21 +306,21 @@ async function submitOrder() {
       res.items.forEach(i => {
         itemsHtml += `<div>${i.name} x${i.qty} - NT$ ${i.price * i.qty}</div>`;
       });
-      
-      // 【關鍵修正 3】下單成功後清空購物車與輸入欄位
-      resetCartData();
-      
       showStatusUI(res.orderId, res.tableNo, res.totalAmount, itemsHtml, '出餐中');
+      // 成功後不需要再解鎖按鈕（已進入狀態頁）
     } else {
       alert(res.message || '點餐失敗');
       document.getElementById('backupCodeGroup').style.display = 'block';
+    }
+  } catch (err) {
+    alert('發生錯誤：' + err.toString());
+  } finally {
+    isSubmitting = false;
+    // 只有失敗時才重新啟用按鈕
+    if (document.getElementById('orderForm').style.display !== 'none') {
       btn.disabled = false;
       btn.innerText = '送出訂單';
     }
-  } catch (e) {
-    alert('系統發生錯誤：' + e.toString());
-    btn.disabled = false;
-    btn.innerText = '送出訂單';
   }
 }
 
